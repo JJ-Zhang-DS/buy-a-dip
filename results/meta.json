@@ -1,8 +1,8 @@
 {
-  "generated_utc": "2026-11-05T17:52:23+00:00",
+  "generated_utc": "2026-11-05T17:55:22+00:00",
   "sample_start": "2020-01-02",
-  "sample_end": "2026-11-05",
-  "n_bars": 1721,
+  "sample_end": "2026-11-04",
+  "n_bars": 1720,
   "tickers": [
     "SPY",
     "QQQ",
