@@ -6,9 +6,33 @@
 
 > Not investment advice. This is a research harness. The ticker list was chosen in hindsight, so every result here is illustrative, not confirmatory.
 
-## Results
+## Results (run of 2026-11-05; sample 2020-01-02 to 2026-11-04)
 
-See [`results/REPORT.md`](results/REPORT.md). GitHub Actions regenerates it on every push to `main` and every Saturday.
+Full tables and heatmaps are in [`results/REPORT.md`](results/REPORT.md). GitHub Actions regenerates them on every code push and every Saturday, so the numbers below can drift.
+
+**Verdict: no general dip-buying edge.** Buying a dip to an MA did no better than buying a random day of the same stock in the same year. Only 1 of 216 dip cells is significantly positive after FDR. 3 are significantly negative.
+
+**Median excess return, dip from above** (median across the 6 band definitions, in %):
+
+| MA \ hold (days) | 5 | 10 | 20 | 60 | 120 | 250 |
+|---|---|---|---|---|---|---|
+| 5 | -0.1 | +0.1 | -0.1 | -1.0 | **-2.0** | -0.7 |
+| 20 | 0.0 | -0.3 | -0.6 | -1.1 | -1.6 | -1.2 |
+| 50 | 0.0 | -0.4 | -1.0 | -1.3 | -0.7 | -0.6 |
+| 60 | -0.1 | -0.4 | -0.8 | -0.7 | 0.0 | +0.3 |
+| 120 | +0.1 | -0.2 | -0.4 | +1.0 | +3.6 | +6.0 |
+| 200 | +0.2 | -0.1 | +0.8 | +3.5 | +6.0 | +3.6 |
+
+| Finding | Evidence |
+|---|---|
+| **Short and medium MAs (5–60 day):** dips do *worse* than a random entry over 20–120 days | 5-day MA at 60 and 120 days: -2.2% to -2.5% excess, significant (q = 0.09). Only 19% of dip cells are positive at 10–20 days |
+| **Long MAs (120 / 200 day):** about +3.5% to +6% at 60–250 days, but fragile | Only one cell survives FDR (120-day MA, ±0.5 ATR, 250 days: +8.2%, q = 0.09). In 10% of those trades the price first fell another 44% or more (worst-case drawdown during the hold). The gain comes from 2020–21; in 2022 it was -5% to -9% |
+| **"Resistance" is not supported** | Rallying up to the MA from below did as well as or better than the dip at 60–250 days. That is momentum, not a ceiling |
+| **A fixed 5% band is not a signal on short MAs** | The close is within 5% of the 5-day MA on 96% of days, and of the 20-day MA on 70% |
+| **Tradable version loses to buy & hold** | Equal-weight portfolio, 5–20 day holds: Sharpe 0.57–0.65 and CAGR 3–7%, against 1.26 and 35% for buy & hold. It caught up only at 250-day holds, when it was invested 95% of the time |
+| **No timing skill vs random entries** | Compared with random entries using the same number of trades and the same hold, the dip strategy beat the median random entry in 35–55% of ticker × spec cases (chance = 50%). It landed in the top 10% in 3–12% (chance = 10%) |
+
+**How to read the long-MA result.** Over 2020–2026, big drawdowns in these 12 names (Mar-2020, late 2022, Apr-2025) were followed by recoveries. That is one macro path, applied to stocks picked *after* they won, and the effect reversed in 2022. Re-test it on longer history and a universe that includes delisted names before relying on it (see `docs/PLAN.md` §6).
 
 ## Design in one table
 
