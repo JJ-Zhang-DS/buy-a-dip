@@ -1,54 +1,60 @@
-# Buy a Dip? - Research Plan (pre-registered)
+# Buy a Dip? - Research Plan (pre-registered, v2)
 
 ## 0. Hypothesis as stated
-> 当价格触及（或接近）200/120/60/50/20/5 日均线时买入，是一个好的时机，因为价格大概率围绕一个范围上下波动。
+> 当价格接近 200/120/60/50/20/5 日均线时买入，是一个好的时机，因为价格大概率围绕一个范围上下波动。
 
 ### Correction-first reframing
 | Problem with the original framing | Consequence | Fix in this repo |
 |---|---|---|
-| "Price oscillates around the MA" is a **level mean-reversion** claim; equity returns show weak reversal at 1w-1m, **momentum** at 3-12m (Jegadeesh 1990; Jegadeesh & Titman 1993; Moskowitz, Ooi & Pedersen 2012) | Short-MA and long-MA touches should behave differently; pooling them hides the sign flip | Grid by MA length x horizon; report sign pattern (H4) |
-| "Good time to buy" has no benchmark | NVDA/LLY/TSLA go up on almost any entry day 2020+ | **Excess vs random entry in the same ticker-year** |
-| Ticker list chosen in hindsight | Survivorship + selection bias inflate any long rule | Excess metric removes own drift; result is illustrative, not confirmatory (H8 = future work on point-in-time S&P 500) |
-| 1-day results are noise | Next-day edge is dominated by bid/ask and gaps | Horizons 5/10/20 (short), 60/120 (medium), 250 (long) |
-| An exact "touch" is fragile | Depends on intraday prints, rarely exact | Proximity bands: fixed +/-1/2/3/5% and volatility-scaled +/-0.5/1 ATR |
-| A fixed 5% band is not comparable across MAs/tickers | SPY is within 5% of its 5-day MA ~97% of days -> "signal" = always-on | Report `% of days in zone` per definition; ATR bands as the scale-free alternative |
+| "Price oscillates around the MA" is a **level mean-reversion** claim. Equity returns show weak reversal at 1 week to 1 month and **momentum** at 3-12 months (Jegadeesh 1990; Jegadeesh & Titman 1993; Moskowitz, Ooi & Pedersen 2012) | Dips to short and long MAs should behave differently | Grid by MA length x horizon |
+| "Good time to buy" needs a benchmark | NVDA/LLY/TSLA rose on almost any entry day | Two "not timing the market" benchmarks (section 2) |
+| Ticker list chosen in hindsight | Survivorship and selection bias inflate any long rule | Same-ticker benchmark removes own drift. The SPY benchmark does **not** (see 2.2) |
+| A fixed % band means different things for different tickers | +/-5% is 97% of days for a 5-day MA and about one day's move for TSLA | **ATR-only bands**: +/-0.5 and +/-1 ATR14 |
+| A close-based signal needs the close before you can trade | Next-day fill adds an overnight gap | **Open-based signal, fill at the same open** |
 
-## 1. Event definition
-- `dist_t = close_t / MA_t - 1` on split-adjusted (not dividend-adjusted) closes = what a chart shows.
-- Zone: `|dist_t| <= w_t` with `w_t = band%` or `k * ATR14_t / MA_t`.
-- **from_above (the hypothesis):** inside the zone today, above the zone yesterday.
-- **from_below (control):** inside the zone today, below the zone yesterday ("rally into resistance").
-- De-clustering: 5-bar cooldown per ticker/spec.
-- Grid: 6 MAs x 6 bands x 2 directions x 6 horizons = **432 pooled cells**, x12 tickers = 5,184 per-ticker cells.
+## 1. Event definition (all inputs known at the open of day t)
+- `MA_{t-1}`, `ATR_{t-1}` are computed from closes through yesterday (split-adjusted, not dividend-adjusted: the chart traders see).
+- `dist_t = open_t / MA_{t-1} - 1`, `width_t = k * ATR_{t-1} / MA_{t-1}`, with `k` in {0.5, 1.0}.
+- **from_above (the dip):** `|dist_t| <= width_t` and yesterday's close was above the zone.
+- **from_below (control):** `|dist_t| <= width_t` and yesterday's close was below the zone.
+- 5-bar cooldown per ticker/spec.
+- Grid: 6 MAs x 2 bands x 2 directions x 6 horizons = **144 pooled cells** per benchmark, x 12 tickers = 1,728 per-ticker cells.
 
-## 2. Outcome
-- Entry next open `t+1`, exit close `t+h`, total-return prices.
-- `excess = R_h - mean(R_h over all days of same ticker & calendar year)`.
-- Path risk: MAE (worst low) / MFE (best high) inside the holding window.
+## 2. Outcome and benchmarks
+- `R_h = adj_open[t+h] / adj_open[t] - 1`: buy at the signal open, sell at the open h trading days later, total-return prices.
+- Horizons: 5 / 10 / 20 (short), 60 / 120 (medium), 250 (long).
+
+### 2.1 `own` (primary): "would buying any day have done as well?"
+`B_own[t]` = mean `R_h` over **every day** in a centered 252-bar window of the same ticker.
+`excess_own = R_h - B_own`. This isolates timing. The stock's trend over that year cancels out.
+
+### 2.2 `spy` (secondary): "did it beat just owning SPY?"
+`B_spy[t]` = SPY's `R_h` over the identical dates.
+`excess_spy = R_h - B_spy` contains the stock's alpha/beta **and** the hindsight selection of winners. For NVDA, any entry day beats SPY. Read it only next to `own`. SPY itself is excluded.
 
 ## 3. Inference
 | Issue | Method |
 |---|---|
-| Overlapping h-day windows, cross-sectional clustering (all 12 names dip in Mar-2020/2022) | **Circular time-shift placebo**: shift the full event calendar by s bars (same s for all tickers), all admissible s via FFT. Null preserves event count, clustering and overlap. |
-| 432 / 5,184 tests | Benjamini-Hochberg FDR; significance marker at q < 0.10 |
-| Regime | Split by SPY above/below its 200-day SMA; year-by-year table |
+| Overlapping windows; all names dipping together (2000-02, 2008, 2020, 2022) | Circular time-shift placebo over all admissible shifts (FFT). It preserves event count, clustering and overlap |
+| 144 x 2 pooled + 1,728 x 2 per-ticker tests | Benjamini-Hochberg FDR within each benchmark, significance at q < 0.10 |
+| Regime | SPY above/below its 200-day SMA at yesterday's close. Periods: 2000-02, 2003-07, 2008-09, 2010-19, 2020-26 |
 
-## 4. Strategy test (H7)
-- Long next open after a from_above event, hold h days, extend on new events, 5 bps per side, cash at 0% when flat.
-- Benchmarks: buy & hold; **random entries with identical #trades and h** (100 draws) -> percentile.
-- Equal-weight 12-sleeve portfolio vs equal-weight buy & hold.
+## 4. Strategy test
+- Buy at the dip open, sell at the open h days later. A new dip extends the hold. 5 bps per side, cash at 0% when flat.
+- Compared with: buy & hold, and **random entries with the same number of trades and the same hold** (100 draws), reported as a percentile.
+- Portfolio: equal weight across the tickers listed that day.
 
 ## 5. Sub-hypotheses and pass criteria
-| ID | H1 statement | Pass |
+| ID | Statement | Pass |
 |---|---|---|
-| H1 | from_above beats random entry at horizon h | mean excess > 0 with BH q < 0.10 and > round-trip cost |
-| H4 | Sign pattern by MA length: short MA ~0/+ at 5-10d, long MA ~0 or + at 60-250d (momentum) | pattern consistent across bands |
-| H5 | from_below underperforms ("resistance") | mean excess < 0, q < 0.10 (prior: rejected) |
-| H6 | Effect is regime-dependent | sign holds in both SPY regimes and >= 4 of 7 years |
-| H7 | Strategy beats random entry and B&H on Sharpe net of costs | >= 60% of ticker-specs above random median and top-decile share >> 10% |
+| H1 | A dip beats `own` at horizon h | excess_own > 0, q < 0.10, and larger than the 10 bps round trip |
+| H4 | Sign pattern by MA length is consistent across both ATR bands | same sign in both bands |
+| H5 | from_below underperforms ("resistance") | excess_own < 0, q < 0.10 |
+| H6 | Effect is regime-robust | same sign in both SPY regimes and >= 4 of 5 periods |
+| H7 | Strategy beats random entry on Sharpe net of costs | >= 60% of ticker-specs above the random median, and a top-decile share well above 10% |
 
-## 6. Known limitations (not fixed here)
-- 2020-2026 is one macro path (crash, V, 2022 bear, AI rally). Re-run with `buyadip fetch --data-start 2005-01-01 && buyadip run --start 2010-01-01` for robustness.
-- 12 hand-picked survivors; a point-in-time universe with delisted names is required for a confirmatory test.
-- No intraday-touch variant (Low_t <= MA) - close-band only, entry at next open (no limit-fill illusion).
-- Long horizons (120/250d) have only ~6-12 non-overlapping windows per ticker in this sample; treat as descriptive.
+## 6. Known limitations
+- 12 hand-picked survivors. A confirmatory test needs a point-in-time universe that includes delisted names.
+- Later listings (GOOGL 2004, TSLA 2010) only cover part of the sample.
+- The open is one snapshot. Intraday touches that never print at the open are not captured.
+- At 250 days, even 27 years give only about 25 independent windows per ticker.

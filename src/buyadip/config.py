@@ -16,49 +16,31 @@ DEFAULT_TICKERS = [
 
 
 @dataclass(frozen=True)
-class Band:
-    """Proximity band around the MA.
-
-    kind="pct": |close/MA - 1| <= width            (fixed %, e.g. 0.05 = +/-5%)
-    kind="atr": |close - MA|   <= width * ATR14     (volatility-scaled)
-    """
-    kind: str
-    width: float
-
-    @property
-    def label(self) -> str:
-        if self.kind == "pct":
-            return f"pct{self.width * 100:g}"
-        return f"atr{self.width:g}"
-
-    def __post_init__(self) -> None:
-        if self.kind not in {"pct", "atr"}:
-            raise ValueError(f"Band.kind must be 'pct' or 'atr', got {self.kind!r}")
-        if not (self.width > 0):
-            raise ValueError(f"Band.width must be > 0, got {self.width}")
-
-
-@dataclass(frozen=True)
 class Config:
     tickers: tuple[str, ...] = tuple(DEFAULT_TICKERS)
-    # History is downloaded from data_start so a 200-day MA is fully warmed up
-    # by sample_start. Events are only counted inside [sample_start, sample_end].
-    data_start: str = "2015-01-01"
-    sample_start: str = "2020-01-01"
-    sample_end: str | None = None  # None = last available bar
+    # Download history from data_start so the 200-day MA is warm by sample_start.
+    # Tickers listed later (GOOGL 2004, TSLA 2010) simply enter the sample when their
+    # own MA is warm.
+    data_start: str = "1998-01-01"
+    sample_start: str = "2000-01-01"
+    sample_end: str | None = "2026-10-31"
 
     ma_windows: tuple[int, ...] = (5, 20, 50, 60, 120, 200)
     ma_type: str = "sma"  # "sma" | "ema"
-    bands: tuple[Band, ...] = (
-        Band("pct", 0.01), Band("pct", 0.02), Band("pct", 0.03), Band("pct", 0.05),
-        Band("atr", 0.5), Band("atr", 1.0),
-    )
+    # Zone half-width in ATR units: |open - MA| <= k * ATR14. ATR scales with each
+    # ticker's own volatility, so "near" means the same thing for WM and TSLA.
+    atr_bands: tuple[float, ...] = (0.5, 1.0)
     directions: tuple[str, ...] = ("from_above", "from_below")
     # short: 5/10/20d, medium: 60/120d, long: 250d (~1 trading year)
     horizons: tuple[int, ...] = (5, 10, 20, 60, 120, 250)
     # Minimum bars between two events on the same ticker/spec (de-clustering).
     cooldown: int = 5
     atr_window: int = 14
+
+    # "Not timing the market" benchmark: mean h-day return of entering on ANY day in a
+    # centered window of this many bars around the signal (same ticker).
+    baseline_window: int = 252
+    market_ticker: str = "SPY"  # second benchmark: SPY over the identical h-day window
 
     # Placebo test: circular time shifts of the event calendar. Shifts closer than
     # horizon + placebo_min_gap bars to zero are excluded (they overlap the real events).
@@ -69,7 +51,6 @@ class Config:
     n_random_strategies: int = 100
     seed: int = 20201
 
-    regime_ticker: str = "SPY"
     regime_ma: int = 200
 
     data_dir: Path = field(default_factory=lambda: Path("data"))
@@ -83,5 +64,13 @@ class Config:
             raise ValueError(f"unknown directions: {bad}")
         if min(self.horizons) < 1 or min(self.ma_windows) < 2:
             raise ValueError("horizons must be >=1 and MA windows >=2")
-        if self.regime_ticker not in self.tickers:
-            raise ValueError("regime_ticker must be part of tickers")
+        if not self.atr_bands or min(self.atr_bands) <= 0:
+            raise ValueError("atr_bands must be non-empty and > 0")
+        if self.market_ticker not in self.tickers:
+            raise ValueError("market_ticker must be part of tickers")
+        if self.baseline_window < 20:
+            raise ValueError("baseline_window too short")
+
+
+def band_label(k: float) -> str:
+    return f"atr{k:g}"

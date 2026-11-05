@@ -70,9 +70,10 @@ def validate(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     if ((df["high"] + tol < df[["open", "close"]].max(axis=1)) |
             (df["low"] - tol > df[["open", "close"]].min(axis=1))).mean() > 0.01:
         raise ValueError(f"{ticker}: >1% of bars have inconsistent OHLC")
-    # A >60% one-day move in the split-adjusted close almost always means a missed split.
+    # A >75% one-day move in a split-adjusted close almost always means a missed split
+    # (largest genuine moves here: AMD +52% in 2016, ~-50% single days in 2000-02).
     jumps = df["close"].pct_change().abs()
-    if (jumps > 0.6).any():
+    if (jumps > 0.75).any():
         raise ValueError(f"{ticker}: suspicious jump on {jumps.idxmax().date()} (unadjusted split?)")
     return df
 

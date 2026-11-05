@@ -1,16 +1,16 @@
-"""Forward-return matrices for the event study.
+"""Forward-return matrices for the event study (open-to-open).
 
-For a signal on day t (close) and horizon h:
-    entry  = adj_open[t+1]                     (next open; no same-bar fill)
-    exit   = adj_close[t+h]                    (close h trading days after the signal)
-    R_h[t] = exit / entry - 1
-    MAE_h  = min(adj_low[t+1..t+h])  / entry - 1   (max adverse excursion, <= 0 mostly)
-    MFE_h  = max(adj_high[t+1..t+h]) / entry - 1   (max favourable excursion)
+For a signal at the open of day t and horizon h:
+    R_h[t]   = adj_open[t+h] / adj_open[t] - 1      buy at today's open, sell at the open h days later
+    MAE_h[t] = min(adj_low[t..t+h-1])  / adj_open[t] - 1
+    MFE_h[t] = max(adj_high[t..t+h-1]) / adj_open[t] - 1
 
-Excess return removes the ticker's own drift in that calendar year:
-    X_h[t] = R_h[t] - mean(R_h over ALL sample days of the same ticker and year)
-This is what makes "NVDA went up 10x" irrelevant: a signal only scores if entries on signal
-days beat entries on random days of the same stock in the same year.
+Two "not timing the market" benchmarks:
+    own : B_own[t] = mean of R_h over ALL days in a centered `baseline_window` bars of the
+          SAME ticker  -> "would buying any day around then have done as well?"
+    spy : B_spy[t] = SPY's R_h over the identical dates -> "did it beat just owning SPY?"
+          (mixes in the stock's own drift/beta; read together with `own`)
+Excess = R_h - benchmark. Benchmarks are ex-post on purpose: they are yardsticks, not signals.
 """
 from __future__ import annotations
 
@@ -25,28 +25,41 @@ from .data import Panel
 @dataclass
 class Forward:
     h: int
-    ret: pd.DataFrame      # R_h
-    excess: pd.DataFrame   # X_h
-    base: pd.DataFrame     # ticker-year baseline mean of R_h
+    ret: pd.DataFrame
+    base_own: pd.DataFrame
+    base_spy: pd.DataFrame
     mae: pd.DataFrame
     mfe: pd.DataFrame
+    hit_base: pd.DataFrame  # share of positive R_h in the same window (any-day hit rate)
+
+    @property
+    def excess_own(self) -> pd.DataFrame:
+        return self.ret - self.base_own
+
+    @property
+    def excess_spy(self) -> pd.DataFrame:
+        return self.ret - self.base_spy
 
 
-def forward_returns(panel: Panel, h: int, sample: pd.Series) -> Forward:
-    entry = panel.adj_open.shift(-1)
-    exit_ = panel.adj_close.shift(-h)
-    ret = exit_ / entry - 1.0
-    lo = panel.adj_low.rolling(h, min_periods=h).min().shift(-h)
-    hi = panel.adj_high.rolling(h, min_periods=h).max().shift(-h)
-    mae = lo / entry - 1.0
-    mfe = hi / entry - 1.0
+def forward_returns(panel: Panel, h: int, sample: pd.Series, baseline_window: int,
+                    market: str) -> Forward:
+    entry = panel.adj_open
+    ret = panel.adj_open.shift(-h) / entry - 1.0
+    lo = panel.adj_low.rolling(h, min_periods=h).min().shift(-(h - 1))
+    hi = panel.adj_high.rolling(h, min_periods=h).max().shift(-(h - 1))
+    mae, mfe = lo / entry - 1.0, hi / entry - 1.0
 
-    ret = ret[sample.values]
-    mae, mfe = mae[sample.values], mfe[sample.values]
-    year = ret.index.year
-    base = ret.groupby(year).transform("mean")
-    excess = ret - base
-    return Forward(h=h, ret=ret, excess=excess, base=base, mae=mae, mfe=mfe)
+    minp = baseline_window // 2
+    roll = dict(window=baseline_window, center=True, min_periods=minp)
+    base_own = ret.rolling(**roll).mean()
+    pos = (ret > 0).astype(float).where(ret.notna())
+    hit_base = pos.rolling(**roll).mean()
+    base_spy = pd.DataFrame({c: ret[market] for c in ret.columns}, index=ret.index)
+    base_spy[market] = np.nan  # SPY vs itself is identically 0: exclude
+
+    s = sample.values
+    return Forward(h=h, ret=ret[s], base_own=base_own[s], base_spy=base_spy[s],
+                   mae=mae[s], mfe=mfe[s], hit_base=hit_base[s])
 
 
 def sample_mask(index: pd.DatetimeIndex, start: str, end: str | None) -> pd.Series:

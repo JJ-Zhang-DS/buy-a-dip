@@ -1,6 +1,8 @@
 name: simulate
 
 # Runs the full grid on fresh Yahoo data and commits data/ + results/ back to the repo.
+# The sample window is fixed (2000-01-01 .. 2026-10-31) so results are reproducible;
+# override it from the "Run workflow" button.
 # GitHub-hosted runners have open internet; commits made with GITHUB_TOKEN do not
 # re-trigger this workflow, so there is no loop.
 on:
@@ -9,12 +11,14 @@ on:
       start:
         description: "sample start (YYYY-MM-DD)"
         required: false
-        default: "2020-01-01"
+        default: "2000-01-01"
+      end:
+        description: "sample end (YYYY-MM-DD)"
+        required: false
+        default: "2026-10-31"
   push:
     branches: [main]
     paths: ["src/**", "tests/**", ".github/workflows/run.yml", "pyproject.toml"]
-  schedule:
-    - cron: "17 22 * * 6"   # Saturdays 22:17 UTC, after the weekly close
 
 permissions:
   contents: write
@@ -40,7 +44,7 @@ jobs:
       - name: Fetch prices
         run: buyadip fetch
       - name: Simulate
-        run: buyadip run --start "${{ github.event.inputs.start || '2020-01-01' }}"
+        run: buyadip run --start "${{ github.event.inputs.start || '2000-01-01' }}" --end "${{ github.event.inputs.end || '2026-10-31' }}"
       - name: Commit results
         run: |
           git config user.name  "github-actions[bot]"
