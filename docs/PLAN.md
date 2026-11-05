@@ -39,6 +39,19 @@
 | 144 x 2 pooled + 1,728 x 2 per-ticker tests | Benjamini-Hochberg FDR within each benchmark, significance at q < 0.10 |
 | Regime | SPY above/below its 200-day SMA at yesterday's close. Periods: 2000-02, 2003-07, 2008-09, 2010-19, 2020-26 |
 
+## 3b. Regimes (v3)
+| Label | Known when? | Definition | Use |
+|---|---|---|---|
+| `spy_trend` | at the open | SPY close_{t-1} above / below its 200-day SMA | filter |
+| `spy_dd` | at the open | SPY drawdown from its running high: <10%, 10-20%, >=20% | filter |
+| `stock_trend` | at the open | ticker close_{t-1} above / below its own 200-day SMA | filter |
+| `phase` | hindsight | for each SPY close drawdown >= 20%: decline = peak->trough, recovery = trough->old peak, bull = rest | descriptive |
+| `episode` | hindsight | the same windows, named: dotcom, gfc, bear_2018, covid, bear_2022 | descriptive (small n) |
+
+- Regime placebo: excess is masked to days in the regime, so the null is "random days **in the same regime**".
+- Filtered strategies: random entries are drawn only from days when the filter is on, so the filter gets no credit for regime timing alone.
+- H6' : a dip edge that exists only in an ex-post phase is **not tradable**.
+
 ## 4. Strategy test
 - Buy at the dip open, sell at the open h days later. A new dip extends the hold. 5 bps per side, cash at 0% when flat.
 - Compared with: buy & hold, and **random entries with the same number of trades and the same hold** (100 draws), reported as a percentile.

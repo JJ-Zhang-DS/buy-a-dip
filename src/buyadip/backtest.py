@@ -62,9 +62,14 @@ def metrics(r: np.ndarray, pos: np.ndarray | None = None) -> dict:
 
 
 def run_ticker(event_rows: np.ndarray, h: int, o: np.ndarray, c: np.ndarray,
-               cost: float, n_random: int, rng: np.random.Generator
+               cost: float, n_random: int, rng: np.random.Generator,
+               candidates: np.ndarray | None = None,
                ) -> tuple[dict, np.ndarray, np.ndarray]:
-    """Strategy vs buy&hold vs random entries for one ticker/spec."""
+    """Strategy vs buy&hold vs random entries for one ticker/spec.
+
+    candidates: rows random entries may be drawn from. Pass the rows where a regime
+    filter is ON so the random benchmark gets the same regime timing for free.
+    """
     T = c.size
     pos = positions(event_rows, h, T)
     strat_r = strategy_returns(pos, o, c, cost)
@@ -75,9 +80,10 @@ def run_ticker(event_rows: np.ndarray, h: int, o: np.ndarray, c: np.ndarray,
 
     k = event_rows.size
     rand_sh, rand_cagr = [], []
-    if k > 0:
+    pool = np.arange(T - 1) if candidates is None else candidates[candidates < T - 1]
+    if k > 0 and pool.size > 0:
         for _ in range(n_random):
-            rows = np.sort(rng.choice(T - 1, size=min(k, T - 1), replace=False))
+            rows = np.sort(rng.choice(pool, size=min(k, pool.size), replace=False))
             p = positions(rows, h, T)
             m = metrics(strategy_returns(p, o, c, cost), p)
             rand_sh.append(m["sharpe"])

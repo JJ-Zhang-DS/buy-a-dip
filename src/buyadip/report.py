@@ -211,6 +211,106 @@ def write(tables: dict[str, pd.DataFrame], results_dir: Path) -> Path:
                      f"{r.top_decile:.0%} | {r.exposure:.0%} |")
         L.append("\nNo timing skill => 'beats median random' ~50% and 'top 10%' ~10%.\n")
 
+    if "event_study_regimes" in tables and not tables["event_study_regimes"].empty:
+        L += _regime_section(tables, fig_dir, nt)
+
     path = results_dir / "REPORT.md"
     path.write_text("\n".join(L))
     return path
+
+
+def _regime_grid(sub: pd.DataFrame, value: str = "excess_own") -> list[str]:
+    piv = sub.pivot_table(index="ma", columns="h", values=value, aggfunc="first")
+    qpv = sub.pivot_table(index="ma", columns="h", values="q_own", aggfunc="first").reindex_like(piv)
+    npv = sub.pivot_table(index="ma", columns="h", values="n", aggfunc="first").reindex_like(piv)
+    L = ["| MA \\ hold | " + " | ".join(f"{c}d" for c in piv.columns) + " | n (20d) |",
+         "|---|" + "---|" * (piv.shape[1] + 1)]
+    for ma in piv.index:
+        cells = []
+        for h in piv.columns:
+            v, qq = piv.at[ma, h], qpv.at[ma, h]
+            t = _pct(v, 1)
+            cells.append(f"**{t}**" if value == "excess_own" and np.isfinite(qq) and qq < Q_STAR else t)
+        n20 = npv.at[ma, 20] if 20 in npv.columns else np.nan
+        L.append(f"| {ma} | " + " | ".join(cells) + f" | {'' if pd.isna(n20) else int(n20)} |")
+    return L
+
+
+def _regime_section(tables: dict, fig_dir: Path, nt: int) -> list[str]:
+    R = tables["event_study_regimes"]
+    EP = tables["bear_episodes"]
+    PFR = tables["backtest_regime_filters_portfolio"]
+    BTR = tables["backtest_regime_filters_by_ticker"]
+    A = R[R.direction == "from_above"]
+    band = A.band.iloc[0]
+    L = ["## 8. Bull vs bear markets and crisis episodes\n",
+         f"Dip from above, band {band}. Excess vs `own`; **bold** = q < {Q_STAR} (BH within each regime family; "
+         "placebo shifts are restricted to days in the same regime).\n",
+         "### 8.1 Bear markets in the sample (SPY close drawdown >= 20%)\n",
+         "| episode | peak | trough | depth | back at peak |", "|---|---|---|---|---|"]
+    for _, e in EP.iterrows():
+        L.append(f"| {e['name']} | {e.peak} | {e.trough} | {e.depth:.0%} | {e.recovered or 'not yet'} |")
+    L.append("\n`decline` = peak -> trough, `recovery` = trough -> back at the old peak, `bull` = the rest. "
+             "These labels use hindsight (nobody knows the trough on the day).\n")
+
+    L.append("### 8.2 Ex-post phase (descriptive)\n")
+    for ph in ("decline", "recovery", "bull"):
+        sub = A[(A.family == "phase") & (A.regime == ph)]
+        if sub.empty:
+            continue
+        L.append(f"**{ph}** - excess vs own\n")
+        L += _regime_grid(sub)
+        L.append("")
+        L.append(f"**{ph}** - raw return (what you actually made)\n")
+        L += _regime_grid(sub, "mean_ret")
+        L.append("")
+        fn = f"heat_phase_{ph}.png"
+        heatmap(sub, "ma", "h", "excess_own", "q_own",
+                f"dip from above | {band} | {ph} phase | vs own  (* q<{Q_STAR})",
+                "excess vs same-ticker any day (%)", fig_dir / fn)
+        L.append(f"![{ph}](figures/{fn})\n")
+
+    L.append("### 8.3 Named episodes (descriptive; small n)\n")
+    E = A[(A.family == "episode") & A.ma.isin([20, 50, 200]) & A.h.isin([20, 60, 120])]
+    L.append("| episode phase | MA | n | raw 20d | raw 60d | raw 120d | excess 120d | MAE p10 (120d) |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    order = [f"{e}_{p}" for e in EP["name"] for p in ("decline", "recovery")]
+    for reg in [r for r in order if r in set(E.regime)]:
+        for ma in (20, 50, 200):
+            g = E[(E.regime == reg) & (E.ma == ma)].set_index("h")
+            if g.empty or 120 not in g.index:
+                continue
+            L.append(f"| {reg} | {ma} | {int(g.at[20, 'n'])} | {_pct(g.at[20, 'mean_ret'], 1)} | "
+                     f"{_pct(g.at[60, 'mean_ret'], 1)} | {_pct(g.at[120, 'mean_ret'], 1)} | "
+                     f"{_pct(g.at[120, 'excess_own'], 1)} | {_pct(g.at[120, 'mae_p10'], 0)} |")
+    L.append("")
+
+    L.append("### 8.4 Ex-ante regimes (known at the open -> usable as filters)\n")
+    for fam, labs in (("spy_trend", ["spy_above_200", "spy_below_200"]),
+                      ("spy_dd", ["dd_lt10", "dd_10_20", "dd_ge20"]),
+                      ("stock_trend", ["stock_above_200", "stock_below_200"])):
+        for lab in labs:
+            sub = A[(A.family == fam) & (A.regime == lab)]
+            if sub.empty:
+                continue
+            L.append(f"**{lab}** - excess vs own\n")
+            L += _regime_grid(sub)
+            L.append("")
+
+    L.append("### 8.5 Regime-filtered dip strategies\n")
+    L.append("Equal-weight portfolio. Random benchmark = same #trades and hold, drawn **only from days where the "
+             "filter is on**, so a filter gets no credit for regime timing alone. B&H Sharpe "
+             f"{PFR.bh_sharpe.iloc[0]:.2f}, CAGR {_pct(PFR.bh_cagr.iloc[0], 1)}, MaxDD {_pct(PFR.bh_max_dd.iloc[0], 0)}.\n")
+    L.append("| filter | MA | hold | CAGR | Sharpe | MaxDD | exposure* | beats in-regime random (share of tickers) |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    BTR = BTR.assign(beat=BTR.sharpe_pctile_vs_random > 0.5)
+    br = BTR.groupby(["filter", "ma", "h"]).agg(beat=("beat", "mean"), exp=("strat_exposure", "median"))
+    for _, r in PFR[PFR.h.isin([60, 120]) & PFR.ma.isin([20, 50, 200])].sort_values(["filter", "h", "ma"]).iterrows():
+        if not np.isfinite(r.strat_sharpe):
+            continue
+        b = br.loc[(r["filter"], r.ma, r.h)]
+        L.append(f"| {r['filter']} | {r.ma} | {r.h} | {_pct(r.strat_cagr, 1)} | {r.strat_sharpe:.2f} | "
+                 f"{_pct(r.strat_max_dd, 0)} | {b.exp:.0%} | {b.beat:.0%} |")
+    L.append("\n*median per-ticker exposure. No timing skill => ~50% beat the in-regime random median. "
+             "All MAs: `backtest_regime_filters_portfolio.csv`.\n")
+    return L

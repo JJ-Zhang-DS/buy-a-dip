@@ -52,6 +52,10 @@ class Config:
     seed: int = 20201
 
     regime_ma: int = 200
+    bear_threshold: float = 0.20   # SPY close drawdown that defines a bear episode
+    regime_bands: tuple[float, ...] = (1.0,)  # ATR bands used in the regime breakdown
+    strategy_filters: tuple[str, ...] = (
+        "all", "spy_above_200", "spy_below_200", "dd_ge20", "stock_above_200", "stock_below_200")
 
     data_dir: Path = field(default_factory=lambda: Path("data"))
     results_dir: Path = field(default_factory=lambda: Path("results"))

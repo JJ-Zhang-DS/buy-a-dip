@@ -174,3 +174,32 @@ def test_panel_with_late_listing():
     m = sample_mask(p.index, "2019-01-01", None)
     f = forward_returns(p, 5, m, 60, "SPY")
     assert f.ret["LATE"].notna().sum() > 100
+
+
+def test_bear_episodes_and_phases():
+    from buyadip.regimes import bear_episodes, market_regimes
+    # 100 -> 130 (peak) -> 91 (-30%, trough) -> 135 (recovered) -> 120 (-11%, only a correction)
+    path = np.r_[np.linspace(100, 130, 300), np.linspace(130, 91, 60), np.linspace(91, 135, 120),
+                 np.linspace(135, 120, 40)]
+    c = pd.Series(path, index=pd.bdate_range("2010-01-01", periods=path.size))
+    eps = bear_episodes(c, 0.20)
+    assert len(eps) == 1
+    e = eps[0]
+    assert e.peak == c.index[300] and e.trough == c.index[359]  # last close at the high
+    assert e.depth == pytest.approx(91 / 130 - 1)
+    assert e.recovered is not None and c[e.recovered] >= 130
+    reg, _ = market_regimes(c, ma_window=50)
+    assert reg.loc[c.index[330], "phase"] == "decline"
+    assert reg.loc[c.index[400], "phase"] == "recovery"
+    assert reg.loc[c.index[-1], "phase"] == "bull"
+    # ex-ante labels are lagged one bar
+    assert pd.isna(reg["spy_dd"].iloc[0])
+    assert reg.loc[c.index[361], "spy_dd"] == "dd_ge20"
+
+
+def test_random_entries_respect_candidates():
+    c = 100 * 1.001 ** np.arange(300)
+    rng = np.random.default_rng(0)
+    cand = np.arange(100, 150)
+    res, _, _ = bt.run_ticker(np.array([120]), 5, c, c, 0.0, 20, rng, candidates=cand)
+    assert np.isfinite(res["rand_sharpe_median"])

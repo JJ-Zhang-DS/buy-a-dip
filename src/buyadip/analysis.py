@@ -13,6 +13,7 @@ from . import backtest as bt
 from .config import Config, band_label
 from .data import Panel
 from .events import forward_returns, sample_mask
+from .regimes import market_regimes, stock_trend
 from .signals import atr, detect_events, moving_average, open_distance, regime_above_ma
 from .stats import bh_fdr, shift_placebo
 
@@ -80,6 +81,7 @@ def run(panel: Panel, cfg: Config) -> dict[str, pd.DataFrame]:
     yrs_listed = listed.sum(axis=0) / bt.TRADING_DAYS
 
     pooled, by_ticker, by_year, freq, bt_rows, port_rows = [], [], [], [], [], []
+    store: dict[tuple, np.ndarray] = {}
 
     for w in cfg.ma_windows:
         ma = moving_average(panel.close, w, cfg.ma_type)
@@ -90,6 +92,9 @@ def run(panel: Panel, cfg: Config) -> dict[str, pd.DataFrame]:
             warm = width[sv].notna().to_numpy()
             ev_sets = {d: detect_events(panel.open, panel.close, ma, atr_df, k, d, cfg.cooldown)[sv].to_numpy()
                        for d in cfg.directions}
+            if k in cfg.regime_bands:
+                for d, E in ev_sets.items():
+                    store[(w, label, d)] = E
             for j, t in enumerate(tickers):
                 freq.append(dict(ma=w, band=label, ticker=t,
                                  pct_days_in_zone=float(inside[warm[:, j], j].mean()) if warm[:, j].any() else np.nan,
@@ -142,6 +147,8 @@ def run(panel: Panel, cfg: Config) -> dict[str, pd.DataFrame]:
                                           **{f"bh_{kk}": v for kk, v in bt.metrics(np.nanmean(B, axis=1)).items()}))
             log.info("MA%d %s done", w, label)
 
+    reg_tables = regime_analysis(panel, cfg, sv, fws, store, o_np, c_np, listed, cost, rng)
+
     pooled_df = pd.DataFrame(pooled)
     et_df = pd.DataFrame(by_ticker)
     for b in BENCHMARKS:
@@ -155,6 +162,7 @@ def run(panel: Panel, cfg: Config) -> dict[str, pd.DataFrame]:
         first_bar={t: str(s_idx[np.argmax(listed[:, j])].date()) for j, t in enumerate(tickers)},
         n_pooled_tests=int(pooled_df["p_own"].notna().sum()),
         n_ticker_tests=int(et_df["p_own"].notna().sum()),
+        bear_episodes=reg_tables["bear_episodes"].to_dict("records"),
         config={k: (v if isinstance(v, (int, float, str, list, tuple, type(None))) else str(v))
                 for k, v in asdict(cfg).items()},
     )
@@ -165,5 +173,85 @@ def run(panel: Panel, cfg: Config) -> dict[str, pd.DataFrame]:
         signal_frequency=pd.DataFrame(freq),
         backtest_by_ticker=pd.DataFrame(bt_rows),
         backtest_portfolio=pd.DataFrame(port_rows),
+        **reg_tables,
         _meta=pd.DataFrame([{"json": json.dumps(meta, default=str)}]),
     )
+
+
+def regime_analysis(panel: Panel, cfg: Config, sv: np.ndarray, fws: dict, store: dict,
+                    o_np: np.ndarray, c_np: np.ndarray, listed: np.ndarray, cost: float,
+                    rng: np.random.Generator) -> dict[str, pd.DataFrame]:
+    """Event study split by market regime + regime-filtered strategies."""
+    reg, eps = market_regimes(panel.close[cfg.market_ticker], cfg.regime_ma, cfg.bear_threshold)
+    reg = reg[sv]
+    st = stock_trend(panel.close, cfg.regime_ma)[sv].to_numpy()
+    T, N = st.shape
+    fams = {c: np.broadcast_to(reg[c].to_numpy()[:, None], (T, N)) for c in reg.columns}
+    fams["stock_trend"] = st
+    ex_post = {"phase", "episode"}
+
+    masks = {}
+    for fam, lab in fams.items():
+        labs = lab.astype(str)
+        for L in sorted(set(np.unique(labs)) - {"None", "nan", "none"}):
+            masks[(fam, L)] = labs == L
+
+    rows = []
+    for (w, label, d), E in store.items():
+        for h in cfg.horizons:
+            fw = fws[h]
+            for (fam, L), mask in masks.items():
+                m = E & fw["valid"] & mask
+                row = dict(family=fam, regime=L, ex_post=fam in ex_post, ma=w, band=label,
+                           direction=d, h=h, **_cell_stats(m, fw))
+                xm = np.where(mask, fw["X_own"], np.nan)
+                pl = shift_placebo(xm, E & mask, h + cfg.placebo_min_gap)
+                row.update(z_own=pl["z"], p_own=pl["p"], ticker_days_in_regime=int(mask.sum()))
+                rows.append(row)
+    R = pd.DataFrame(rows)
+    if not R.empty:
+        R["q_own"] = np.nan
+        for fam, g in R.groupby("family"):
+            R.loc[g.index, "q_own"] = bh_fdr(g["p_own"].to_numpy())
+    log.info("regime event study: %d cells", len(R))
+
+    # Regime-filtered dip strategies (ex-ante filters only).
+    allowed_map = {
+        "all": np.ones((T, N), bool),
+        "spy_above_200": masks.get(("spy_trend", "spy_above_200")),
+        "spy_below_200": masks.get(("spy_trend", "spy_below_200")),
+        "dd_ge20": masks.get(("spy_dd", "dd_ge20")),
+        "stock_above_200": masks.get(("stock_trend", "stock_above_200")),
+        "stock_below_200": masks.get(("stock_trend", "stock_below_200")),
+    }
+    srows, prows = [], []
+    for (w, label, d), E in store.items():
+        if d != "from_above":
+            continue
+        for f in cfg.strategy_filters:
+            allowed = allowed_map[f]
+            if allowed is None:
+                continue
+            Ef = E & allowed
+            for h in cfg.horizons:
+                S = np.full((T, N), np.nan)
+                B = np.full((T, N), np.nan)
+                for j, t in enumerate(panel.tickers):
+                    ok = listed[:, j]
+                    if ok.sum() < 250:
+                        continue
+                    res, sr, br = bt.run_ticker(np.flatnonzero(Ef[ok, j]), h, o_np[ok, j], c_np[ok, j], cost,
+                                                cfg.n_random_strategies, rng,
+                                                candidates=np.flatnonzero(allowed[ok, j]))
+                    srows.append(dict(filter=f, ma=w, band=label, h=h, ticker=t, **res))
+                    S[ok, j], B[ok, j] = sr, br
+                prows.append(dict(filter=f, ma=w, band=label, h=h,
+                                  **{f"strat_{kk}": v for kk, v in bt.metrics(np.nanmean(S, axis=1)).items()},
+                                  **{f"bh_{kk}": v for kk, v in bt.metrics(np.nanmean(B, axis=1)).items()}))
+        log.info("regime strategies MA%d %s done", w, label)
+
+    ep = pd.DataFrame([dict(name=e.name, peak=str(e.peak.date()), trough=str(e.trough.date()),
+                            recovered=str(e.recovered.date()) if e.recovered is not None else None,
+                            depth=round(e.depth, 4)) for e in eps])
+    return dict(event_study_regimes=R, backtest_regime_filters_by_ticker=pd.DataFrame(srows),
+                backtest_regime_filters_portfolio=pd.DataFrame(prows), bear_episodes=ep)
