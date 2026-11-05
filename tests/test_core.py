@@ -133,6 +133,15 @@ def test_validate_rejects_unadjusted_split():
         validate(_frame(close), "X")
 
 
+def test_drop_partial_session():
+    from buyadip.data import drop_partial_session
+    df = _frame(np.full(5, 100.0), start="2026-11-02")  # Mon..Fri
+    intraday = pd.Timestamp("2026-11-06 12:00", tz="America/New_York")
+    after = pd.Timestamp("2026-11-06 17:00", tz="America/New_York")
+    assert len(drop_partial_session(df, intraday)) == 4
+    assert len(drop_partial_session(df, after)) == 5
+
+
 def test_config_fails_fast():
     with pytest.raises(ValueError):
         Band("pct", -0.1)

@@ -77,6 +77,15 @@ def validate(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return df
 
 
+def drop_partial_session(df: pd.DataFrame, now: pd.Timestamp | None = None) -> pd.DataFrame:
+    """Yahoo returns today's still-forming bar during market hours; a signal on it would use
+    a close that does not exist yet. Drop it unless the US session has closed."""
+    now = now or pd.Timestamp.now(tz="America/New_York")
+    if len(df) and df.index[-1].date() == now.date() and (now.hour, now.minute) < (16, 30):
+        return df.iloc[:-1]
+    return df
+
+
 def fetch(tickers: list[str] | tuple[str, ...], start: str, data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     for t in tickers:
@@ -84,7 +93,7 @@ def fetch(tickers: list[str] | tuple[str, ...], start: str, data_dir: Path) -> N
             raw = _download_yfinance(t, start)
         except RuntimeError:
             raw = _download_stooq(t, start)
-        df = validate(raw, t)
+        df = drop_partial_session(validate(raw, t))
         df.to_parquet(data_dir / f"{t}.parquet")
         log.info("%s: %d bars %s -> %s", t, len(df), df.index[0].date(), df.index[-1].date())
         time.sleep(1.0)  # be polite; Yahoo rate-limits shared CI IPs
