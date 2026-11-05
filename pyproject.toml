@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "buyadip"
+version = "0.1.0"
+description = "Buy a Dip? Event study + backtest of buying near 5/20/50/60/120/200-day moving averages"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pyarrow>=14",
+  "matplotlib>=3.8",
+  "yfinance>=0.2.54",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+buyadip = "buyadip.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
