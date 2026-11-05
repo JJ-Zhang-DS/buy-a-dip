@@ -70,7 +70,7 @@ Each is split into a **decline** (peak to trough) and a **recovery** (trough to 
 | Known at the open (tradable) | Result |
 |---|---|
 | SPY above its 200-day MA | Dips to the 120/200-day MA: **+1.9% to +3.0%** at 120–250 days (q = 0.01–0.05). Dips to the 5-day MA: **-4.6%** at 120 days |
-| Stock above its own 200-day MA | Dips to the 120/200-day MA: **+2.2% to +3.4%** at 60–250 days (q = 0.004), the most robust result. Dips to the 5-day MA: **-6.2%** |
+| Stock above its own 200-day MA | Dips to the 120/200-day MA: **+2.2% to +3.4%** at 60–250 days (q = 0.004), the most robust result. For the 200-day MA this filter is automatic, since a dip from above means the stock was above it. Dips to the 5-day MA: **-6.2%** |
 | SPY below its 200-day MA, or 20%+ below its high | Nothing significant. These days mix declines (the worst entries) with early recoveries (the best), and on the day you can't tell which one you are in |
 
 | Filtered strategy (portfolio) | Sharpe | CAGR | MaxDD | Beats random entries on the same regime days |
