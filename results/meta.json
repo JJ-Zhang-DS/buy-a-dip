@@ -1,8 +1,8 @@
 {
-  "generated_utc": "2026-11-05T17:55:22+00:00",
-  "sample_start": "2020-01-02",
-  "sample_end": "2026-11-04",
-  "n_bars": 1720,
+  "generated_utc": "2026-11-05T18:19:48+00:00",
+  "sample_start": "2000-01-03",
+  "sample_end": "2026-10-30",
+  "n_bars": 6748,
   "tickers": [
     "SPY",
     "QQQ",
@@ -17,8 +17,22 @@
     "WM",
     "LLY"
   ],
-  "n_pooled_tests": 432,
-  "n_ticker_tests": 5160,
+  "first_bar": {
+    "SPY": "2000-01-03",
+    "QQQ": "2000-01-03",
+    "TSLA": "2010-06-29",
+    "GOOGL": "2004-08-19",
+    "NVDA": "2000-01-03",
+    "AMD": "2000-01-03",
+    "ASML": "2000-01-03",
+    "MSFT": "2000-01-03",
+    "ISRG": "2000-06-16",
+    "URI": "2000-01-03",
+    "WM": "2000-01-03",
+    "LLY": "2000-01-03"
+  },
+  "n_pooled_tests": 144,
+  "n_ticker_tests": 1728,
   "config": {
     "tickers": [
       "SPY",
@@ -34,9 +48,9 @@
       "WM",
       "LLY"
     ],
-    "data_start": "2015-01-01",
-    "sample_start": "2020-01-01",
-    "sample_end": null,
+    "data_start": "1998-01-01",
+    "sample_start": "2000-01-01",
+    "sample_end": "2026-10-31",
     "ma_windows": [
       5,
       20,
@@ -46,31 +60,9 @@
       200
     ],
     "ma_type": "sma",
-    "bands": [
-      {
-        "kind": "pct",
-        "width": 0.01
-      },
-      {
-        "kind": "pct",
-        "width": 0.02
-      },
-      {
-        "kind": "pct",
-        "width": 0.03
-      },
-      {
-        "kind": "pct",
-        "width": 0.05
-      },
-      {
-        "kind": "atr",
-        "width": 0.5
-      },
-      {
-        "kind": "atr",
-        "width": 1.0
-      }
+    "atr_bands": [
+      0.5,
+      1.0
     ],
     "directions": [
       "from_above",
@@ -86,11 +78,12 @@
     ],
     "cooldown": 5,
     "atr_window": 14,
+    "baseline_window": 252,
+    "market_ticker": "SPY",
     "placebo_min_gap": 20,
     "cost_bps_per_side": 5.0,
     "n_random_strategies": 100,
     "seed": 20201,
-    "regime_ticker": "SPY",
     "regime_ma": 200,
     "data_dir": "data",
     "results_dir": "results"
