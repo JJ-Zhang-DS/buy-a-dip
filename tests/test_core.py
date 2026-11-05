@@ -163,3 +163,14 @@ def test_config_fails_fast():
         Config(atr_bands=(-0.5,))
     with pytest.raises(ValueError):
         Config(ma_type="wma")
+
+
+def test_panel_with_late_listing():
+    """Tickers with shorter histories (TSLA 2010) leave NaN before listing, not an error."""
+    a = _frame(_random_walk(400, 1), start="2019-01-01")
+    b = _frame(_random_walk(200, 2), start="2019-08-01")
+    p = panel_from_frames({"SPY": a, "LATE": b})
+    assert p.close["LATE"].isna().sum() > 0
+    m = sample_mask(p.index, "2019-01-01", None)
+    f = forward_returns(p, 5, m, 60, "SPY")
+    assert f.ret["LATE"].notna().sum() > 100

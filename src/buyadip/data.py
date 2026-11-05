@@ -138,8 +138,10 @@ def panel_from_frames(frames: dict[str, pd.DataFrame]) -> Panel:
     o, h, l, c, ac = (wide(k) for k in ["open", "high", "low", "close", "adj_close"])
     # Total-return factor. Applying it to O/H/L gives dividend-adjusted intraday prices.
     f = ac / c
-    if not np.isfinite(f.stack()).all():
-        raise ValueError("non-finite adjustment factor")
+    traded = c.notna().to_numpy() & ac.notna().to_numpy()
+    fv = f.to_numpy()
+    if not (np.isfinite(fv[traded]).all() and (fv[traded] > 0).all()):
+        raise ValueError("non-finite or non-positive adjustment factor on a traded day")
     # Each ticker keeps its own listing history; NaN where a ticker did not trade.
     return Panel(open=o, high=h, low=l, close=c,
                  adj_open=o * f, adj_high=h * f, adj_low=l * f, adj_close=ac)
