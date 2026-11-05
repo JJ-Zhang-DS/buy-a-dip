@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-11-05T18:19:48+00:00",
+  "generated_utc": "2026-11-05T19:21:15+00:00",
   "sample_start": "2000-01-03",
   "sample_end": "2026-10-30",
   "n_bars": 6748,
@@ -33,6 +33,43 @@
   },
   "n_pooled_tests": 144,
   "n_ticker_tests": 1728,
+  "bear_episodes": [
+    {
+      "name": "dotcom",
+      "peak": "2000-03-24",
+      "trough": "2002-10-09",
+      "recovered": "2007-06-01",
+      "depth": -0.4914
+    },
+    {
+      "name": "gfc",
+      "peak": "2007-10-09",
+      "trough": "2009-03-09",
+      "recovered": "2013-03-14",
+      "depth": -0.5647
+    },
+    {
+      "name": "bear_2018",
+      "peak": "2018-09-20",
+      "trough": "2018-12-24",
+      "recovered": "2019-04-29",
+      "depth": -0.2018
+    },
+    {
+      "name": "covid",
+      "peak": "2020-02-19",
+      "trough": "2020-03-23",
+      "recovered": "2020-08-18",
+      "depth": -0.341
+    },
+    {
+      "name": "bear_2022",
+      "peak": "2022-01-03",
+      "trough": "2022-10-12",
+      "recovered": "2024-01-19",
+      "depth": -0.2536
+    }
+  ],
   "config": {
     "tickers": [
       "SPY",
@@ -85,6 +122,18 @@
     "n_random_strategies": 100,
     "seed": 20201,
     "regime_ma": 200,
+    "bear_threshold": 0.2,
+    "regime_bands": [
+      1.0
+    ],
+    "strategy_filters": [
+      "all",
+      "spy_above_200",
+      "spy_below_200",
+      "dd_ge20",
+      "stock_above_200",
+      "stock_below_200"
+    ],
     "data_dir": "data",
     "results_dir": "results"
   }
