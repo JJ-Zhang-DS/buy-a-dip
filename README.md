@@ -19,6 +19,7 @@
 | Benchmark `spy` | SPY over the identical dates | Beat the market? It also picks up the hindsight selection of winners |
 | Inference | Circular time-shift placebo + Benjamini-Hochberg FDR | Handles overlapping holds, days when all names dip together, and the 144 x 2 tests |
 | Strategy | Buy at the dip open and hold h days, 5 bps per side. Compared with buy & hold **and** with random entries using the same number of trades and the same hold | Separates timing skill from simply holding less |
+| Regimes | Usable on the day: SPY above/below its 200-day MA, SPY drawdown bucket, stock above/below its own 200-day MA. Hindsight only: decline/recovery of each >= 20% bear market and named episodes | Bull vs bear, and the dot-com / GFC / COVID / 2022 cases |
 
 Plan, sub-hypotheses and pass criteria: [`docs/PLAN.md`](docs/PLAN.md). Full tables and heatmaps: [`results/REPORT.md`](results/REPORT.md).
 
@@ -45,7 +46,42 @@ Plan, sub-hypotheses and pass criteria: [`docs/PLAN.md`](docs/PLAN.md). Full tab
 | **Tradable version: no timing skill** | The dip strategy never beat buy & hold on Sharpe (best 0.90 vs 0.92). Against random entries with the same trades and hold, it beat the median 40–51% of the time (chance = 50%) and landed in the top 10% 5–10% of the time (chance = 10%) |
 | **Lower drawdown only comes from holding less** | 200-day MA, 60-day hold: max drawdown -26% vs -62% for buy & hold, but CAGR 7.2% vs 23.2% at 32% exposure. Random entries with the same exposure do as well |
 
-**Bottom line.** The idea that "price oscillates around the MA" fails for short MAs: dips there keep falling, which is short-term momentum. The long-MA dip effect exists in the pooled data, but it comes from a few names (NVDA, AMD, URI) and from 2020–26, and it reversed in 2000–02. As a timing rule it adds nothing over random entries. The more robust pattern in this data is the opposite of the hypothesis: buying when price rises up to its MA from below.
+### Bull vs bear markets and crisis episodes (v3)
+
+Five SPY bear markets (close-to-close drawdown >= 20%) fall in the sample:
+
+| Bear market | Peak to trough | Depth | Back at old peak |
+|---|---|---|---|
+| Dot-com | 2000-03 to 2002-10 | -49% | 2007-06 |
+| GFC | 2007-10 to 2009-03 | -56% | 2013-03 |
+| 2018 | 2018-09 to 2018-12 | -20% | 2019-04 |
+| COVID | 2020-02 to 2020-03 | -34% | 2020-08 |
+| 2022 | 2022-01 to 2022-10 | -25% | 2024-01 |
+
+Each is split into a **decline** (peak to trough) and a **recovery** (trough to the old peak). These labels use hindsight, so they describe what happened but can't be traded. The filters further down use only data known at the open.
+
+| Phase (hindsight) | Dip to MA, raw return over 120 days | Excess vs `own` | Reading |
+|---|---|---|---|
+| **Decline** | -3% to -10% (GFC 50-day MA: -21%; dot-com: -10% to -13%; 2022: -4% to -8%) | -3% to -9% | Catching a falling knife. In 10% of GFC and dot-com dips the price fell another 48–69%. Dips were no worse than random days in the same decline: in a decline, any entry loses |
+| **Recovery** | +12% to +20% | Long MAs +4% to +5% (200-day MA, 250-day hold: +4.7%, q = 0.05) | Buying dips during a recovery works, but you only know you are in a recovery afterwards |
+| **Bull** (outside bear episodes) | +13% to +14% | 5–20 day MA: -3% (20-day MA, 120-day hold, q = 0.09). 120/200-day MA: +3% to +4% (200-day MA, 60-day hold, q = 0.08) | The pattern from the full sample |
+| **COVID** (special case) | 200-day MA dips *during* the crash: +51% over 120 days (n = 10) | +29% | A 23-trading-day V-shaped crash. No other bear market looked like this; don't generalise from it |
+
+| Known at the open (tradable) | Result |
+|---|---|
+| SPY above its 200-day MA | Dips to the 120/200-day MA: **+1.9% to +3.0%** at 120–250 days (q = 0.01–0.05). Dips to the 5-day MA: **-4.6%** at 120 days |
+| Stock above its own 200-day MA | Dips to the 120/200-day MA: **+2.2% to +3.4%** at 60–250 days (q = 0.004), the most robust result. Dips to the 5-day MA: **-6.2%** |
+| SPY below its 200-day MA, or 20%+ below its high | Nothing significant. These days mix declines (the worst entries) with early recoveries (the best), and on the day you can't tell which one you are in |
+
+| Filtered strategy (portfolio) | Sharpe | CAGR | MaxDD | Beats random entries on the same regime days |
+|---|---|---|---|---|
+| Buy & hold | 0.92 | 23.2% | -63% | - |
+| Dip, no filter (median of specs) | 0.63 | - | - | 43% |
+| Dip, only when SPY above its 200-day MA (200-day MA, 120-day hold) | 0.96 | 9.0% | **-17%** | 44% |
+| Dip, only when SPY is 20%+ below its high (median) | 0.38 | - | - | 45% |
+| Dip, only when SPY below its 200-day MA (median) | 0.21 | - | - | 44% |
+
+**Bottom line.** Bull versus bear changes the outcome far more than the MA does. A dip in a decline loses money however it is defined. A dip in a recovery makes money, but the trough is only known in hindsight. Market-wide filters you can apply on the day (SPY above its 200-day MA, or SPY's drawdown from its high) cannot separate the two. The SPY above 200-day MA filter raises Sharpe and cuts drawdown from -63% to -17%. That gain comes from the **trend filter** (staying out of declines, as in Faber 2007), not from the dip: within the same regime days, dip entries beat random entries only 44% of the time. The one consistent dip effect is a pullback to the 120/200-day MA while the stock stays above its own 200-day MA: +2% to +3% excess over 3–12 months, with deep interim drawdowns.
 
 ## Prior evidence (literature review)
 
@@ -75,6 +111,7 @@ src/buyadip/
   signals.py    SMA/EMA, ATR, open-in-zone detection, cooldown
   events.py     open-to-open returns, MAE/MFE, own + SPY benchmarks
   stats.py      FFT circular-shift placebo, BH-FDR
+  regimes.py    bull/bear labels (ex-ante filters, ex-post phases, named crises)
   backtest.py   strategy vs buy & hold vs equal-trade random entries
   analysis.py   orchestration -> tables
   report.py     CSVs, heatmaps, REPORT.md
