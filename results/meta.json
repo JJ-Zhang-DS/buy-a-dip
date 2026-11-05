@@ -1,0 +1,98 @@
+{
+  "generated_utc": "2026-11-05T17:52:23+00:00",
+  "sample_start": "2020-01-02",
+  "sample_end": "2026-11-05",
+  "n_bars": 1721,
+  "tickers": [
+    "SPY",
+    "QQQ",
+    "TSLA",
+    "GOOGL",
+    "NVDA",
+    "AMD",
+    "ASML",
+    "MSFT",
+    "ISRG",
+    "URI",
+    "WM",
+    "LLY"
+  ],
+  "n_pooled_tests": 432,
+  "n_ticker_tests": 5160,
+  "config": {
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "TSLA",
+      "GOOGL",
+      "NVDA",
+      "AMD",
+      "ASML",
+      "MSFT",
+      "ISRG",
+      "URI",
+      "WM",
+      "LLY"
+    ],
+    "data_start": "2015-01-01",
+    "sample_start": "2020-01-01",
+    "sample_end": null,
+    "ma_windows": [
+      5,
+      20,
+      50,
+      60,
+      120,
+      200
+    ],
+    "ma_type": "sma",
+    "bands": [
+      {
+        "kind": "pct",
+        "width": 0.01
+      },
+      {
+        "kind": "pct",
+        "width": 0.02
+      },
+      {
+        "kind": "pct",
+        "width": 0.03
+      },
+      {
+        "kind": "pct",
+        "width": 0.05
+      },
+      {
+        "kind": "atr",
+        "width": 0.5
+      },
+      {
+        "kind": "atr",
+        "width": 1.0
+      }
+    ],
+    "directions": [
+      "from_above",
+      "from_below"
+    ],
+    "horizons": [
+      5,
+      10,
+      20,
+      60,
+      120,
+      250
+    ],
+    "cooldown": 5,
+    "atr_window": 14,
+    "placebo_min_gap": 20,
+    "cost_bps_per_side": 5.0,
+    "n_random_strategies": 100,
+    "seed": 20201,
+    "regime_ticker": "SPY",
+    "regime_ma": 200,
+    "data_dir": "data",
+    "results_dir": "results"
+  }
+}
